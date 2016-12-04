@@ -55,6 +55,7 @@
     <Compile Include="DataModel\TVGuideListingsData.cs" />
     <Compile Include="DataModel\TVGuideProviderData.cs" />
     <Compile Include="DataModel\xmltv-lineups.cs" />
+    <Compile Include="DataModel\xmltv.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -63,10 +64,16 @@
       <SubType>Designer</SubType>
     </None>
     <None Include="packages.config" />
-    <None Include="xmltv-lineups.xsd">
+    <None Include="Schema\xmltv.xsd">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="Schema\xmltv-lineups.xsd">
       <SubType>Designer</SubType>
     </None>
     <None Include="xmltv.dtd" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="XMLTV Sample\guide.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

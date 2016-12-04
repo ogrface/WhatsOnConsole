@@ -5,6 +5,7 @@ using System.Linq;
 using WhatsOn.DataModel;
 using RestSharp;
 using Newtonsoft.Json;
+using System.Xml;
 
 namespace WhatsOnConsole
 {
@@ -55,8 +56,7 @@ namespace WhatsOnConsole
                 string startUrlPart = GetCurrentTimeInMilliseconds();
                 startUrlPart = startUrlPart.Substring(0, startUrlPart.Length - 3);
                 client = new RestClient(tvGuideSchedulesUrl + "/" + providerUrlPart + "/start/" + startUrlPart + "/duration/240");
-                request = new RestRequest(Method.GET);
-                response = client.Execute(request);
+                response = client.Execute(new RestRequest(Method.GET));
 
                 if (response.ResponseStatus == ResponseStatus.Completed)
                 {
@@ -66,18 +66,22 @@ namespace WhatsOnConsole
                         Console.WriteLine(l.Channel.Number + ", " + l.Channel.FullName + ", " + l.Channel.Name);
                     }
 
-                    IEnumerable<TVGuideListingsData.ProgramSchedule> schedules = 
-                        (from l in listings
-                        where l.Channel.Name.Contains("KVLY")
-                        select l).First().ProgramSchedules;
+                    //IEnumerable<TVGuideListingsData.ProgramSchedule> schedules = 
+                    //    (from l in listings
+                    //    where l.Channel.Name.Contains("KVLY")
+                    //    select l).First().ProgramSchedules;
 
-                    foreach (var s in schedules)
-                    {
-                        string startDateTime = unixEpoch.AddSeconds(s.StartTime).ToString();
-                        string endDateTime = unixEpoch.AddSeconds(s.EndTime).ToString();
-                        Console.WriteLine(s.Title + ", " + s.Rating + ", " + s.EpisodeTitle + ", " + startDateTime + ", " + endDateTime);
-                    }
+                    //foreach (var s in schedules)
+                    //{
+                    //    string startDateTime = unixEpoch.AddSeconds(s.StartTime).ToString();
+                    //    string endDateTime = unixEpoch.AddSeconds(s.EndTime).ToString();
+                    //    Console.WriteLine(s.Title + ", " + s.Rating + ", " + s.EpisodeTitle + ", " + startDateTime + ", " + endDateTime);
+                    //}
+
+                    tv lineupType = new xmltvLineupType();
+                    lineupType.type = lineupTypeEnum.Analog;
                     
+
                 }
                 Console.ReadLine();
             }
