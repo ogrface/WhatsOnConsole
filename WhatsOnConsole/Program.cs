@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Configuration;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using WhatsOn.DataModel;
 using RestSharp;
 using Newtonsoft.Json;
-using System.Xml;
+using System.Xml.Serialization;
 
 namespace WhatsOnConsole
 {
@@ -34,10 +35,14 @@ namespace WhatsOnConsole
             string providerType = (string)settingsReader.GetValue("providerType", typeof(string));
             string providerName = (string)settingsReader.GetValue("providerName", typeof(string));
             string deviceName = (string)settingsReader.GetValue("deviceName", typeof(string));
+            string scannedChannels = (string)settingsReader.GetValue("channels", typeof(string));
+
+            string[] scannedChannelList = scannedChannels.Split(',');
 
             if (response.ResponseStatus == ResponseStatus.Completed)
             {
-                IEnumerable<TVGuideProviderData.RootObject> providers = (IEnumerable<TVGuideProviderData.RootObject>)JsonConvert.DeserializeObject(response.Content, typeof(List<TVGuideProviderData.RootObject>));
+                IEnumerable<TVGuideProviderData.RootObject> providers = 
+                    (IEnumerable<TVGuideProviderData.RootObject>)JsonConvert.DeserializeObject(response.Content, typeof(List<TVGuideProviderData.RootObject>));
 
                 TVGuideProviderData.RootObject provider = 
                     (from p in providers
@@ -60,27 +65,45 @@ namespace WhatsOnConsole
 
                 if (response.ResponseStatus == ResponseStatus.Completed)
                 {
-                    IEnumerable<TVGuideListingsData.RootObject> listings = (IEnumerable<TVGuideListingsData.RootObject>)JsonConvert.DeserializeObject(response.Content, typeof(IEnumerable<TVGuideListingsData.RootObject>));
+                    IEnumerable<TVGuideListingsData.RootObject> listings = 
+                        (IEnumerable<TVGuideListingsData.RootObject>)JsonConvert.DeserializeObject(response.Content, typeof(IEnumerable<TVGuideListingsData.RootObject>));
+
                     foreach (var l in listings)
                     {
-                        Console.WriteLine(l.Channel.Number + ", " + l.Channel.FullName + ", " + l.Channel.Name);
+                        if (scannedChannelList.Contains(l.Channel.Number))
+                        {
+                            Console.WriteLine(l.Channel.Number + ", " + l.Channel.FullName + ", " + l.Channel.Name);
+                        }
                     }
 
-                    //IEnumerable<TVGuideListingsData.ProgramSchedule> schedules = 
-                    //    (from l in listings
-                    //    where l.Channel.Name.Contains("KVLY")
-                    //    select l).First().ProgramSchedules;
+                    tv tv = new tv();
+                    tv.channel = new tvChannel[listings.Count()];
+                    int i = 0;
 
-                    //foreach (var s in schedules)
-                    //{
-                    //    string startDateTime = unixEpoch.AddSeconds(s.StartTime).ToString();
-                    //    string endDateTime = unixEpoch.AddSeconds(s.EndTime).ToString();
-                    //    Console.WriteLine(s.Title + ", " + s.Rating + ", " + s.EpisodeTitle + ", " + startDateTime + ", " + endDateTime);
-                    //}
+                    foreach (var listing in listings)
+                    {
+                        if (scannedChannelList.Contains(listing.Channel.Number))
+                        {
+                            var tvChannelDisplayName = new tvChannelDisplayname()
+                            {
+                                lang = "en",
+                                Value = listing.Channel.FullName
+                            };
 
-                    tv lineupType = new xmltvLineupType();
-                    lineupType.type = lineupTypeEnum.Analog;
-                    
+                            var tvChannel = new tvChannel()
+                            {
+                                id = listing.Channel.Name,
+                                displayname = tvChannelDisplayName,
+                                url = "http://www.tvguide.com.FargoND-OTA"
+                            };
+
+                            tv.channel[i] = tvChannel;
+                            i++;
+                        }
+                    }
+
+                    XmlSerializer serializer = new XmlSerializer(typeof(tv));
+                    serializer.Serialize(Console.Out, tv);
 
                 }
                 Console.ReadLine();
