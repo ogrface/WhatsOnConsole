@@ -18,27 +18,18 @@ namespace WhatsOnConsole
         private const string tvGuideProgramBaseUrl = "http://mapi.tvguide.com/listings/details?program=";
         private static readonly DateTime unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        static void Main(string[] args)
+        void Main(string[] args)
         {
             Run();
         }
 
-        static void Run()
+        void Run()
         {
-            string providerUrlPart;
-
+            EnvironmentSettings settings = EnvironmentSettings.RetrieveSettings(new AppSettingsReader());
             var client = new RestClient(tvGuideProvidersUrl);
             var request = new RestRequest(Method.GET);
             var response = client.Execute(request);
-            AppSettingsReader settingsReader = new AppSettingsReader();
-
-            string providerType = (string)settingsReader.GetValue("providerType", typeof(string));
-            string providerName = (string)settingsReader.GetValue("providerName", typeof(string));
-            string deviceName = (string)settingsReader.GetValue("deviceName", typeof(string));
-            string scannedChannels = (string)settingsReader.GetValue("channels", typeof(string));
-
-            string[] scannedChannelList = scannedChannels.Split(',');
-
+            
             if (response.ResponseStatus == ResponseStatus.Completed)
             {
                 IEnumerable<TVGuideProviderData.RootObject> providers = 
@@ -46,19 +37,19 @@ namespace WhatsOnConsole
 
                 TVGuideProviderData.RootObject provider = 
                     (from p in providers
-                    where p.Type == providerType
-                    && p.Name.Contains(providerName)
+                    where p.Type == settings.ProviderType
+                    && p.Name.Contains(settings.ProviderName)
                     select p).First();
 
                 IEnumerable<TVGuideProviderData.Device> providerDevices = provider.Devices;
                 int providerDevice = 
                     (from d in providerDevices
-                    where d.DeviceName.Contains(deviceName)
+                    where d.DeviceName.Contains(settings.DeviceName)
                     select d).First().DeviceFlag;
 
-                providerUrlPart = provider.Id.ToString() + "." + providerDevice.ToString();
+                string providerUrlPart = provider.Id.ToString() + "." + providerDevice.ToString();
 
-                string startUrlPart = GetCurrentTimeInMilliseconds();
+                string startUrlPart = Utilities.GetCurrentTimeInMilliseconds();
                 startUrlPart = startUrlPart.Substring(0, startUrlPart.Length - 3);
                 client = new RestClient(tvGuideSchedulesUrl + "/" + providerUrlPart + "/start/" + startUrlPart + "/duration/240");
                 response = client.Execute(new RestRequest(Method.GET));
@@ -68,53 +59,102 @@ namespace WhatsOnConsole
                     IEnumerable<TVGuideListingsData.RootObject> listings = 
                         (IEnumerable<TVGuideListingsData.RootObject>)JsonConvert.DeserializeObject(response.Content, typeof(IEnumerable<TVGuideListingsData.RootObject>));
 
-                    foreach (var l in listings)
-                    {
-                        if (scannedChannelList.Contains(l.Channel.Number))
-                        {
-                            Console.WriteLine(l.Channel.Number + ", " + l.Channel.FullName + ", " + l.Channel.Name);
-                        }
-                    }
+                    tv tv = MapTVGuideDataToXMLtv(settings.Channels, listings);
 
-                    tv tv = new tv();
-                    tv.channel = new tvChannel[listings.Count()];
-                    int i = 0;
-
-                    foreach (var listing in listings)
-                    {
-                        if (scannedChannelList.Contains(listing.Channel.Number))
-                        {
-                            var tvChannelDisplayName = new tvChannelDisplayname()
-                            {
-                                lang = "en",
-                                Value = listing.Channel.FullName
-                            };
-
-                            var tvChannel = new tvChannel()
-                            {
-                                id = listing.Channel.Name,
-                                displayname = tvChannelDisplayName,
-                                url = "http://www.tvguide.com.FargoND-OTA"
-                            };
-
-                            tv.channel[i] = tvChannel;
-                            i++;
-                        }
-                    }
-
+                    StreamWriter writer = new StreamWriter("C:\\temp\\xmltv.xml");
                     XmlSerializer serializer = new XmlSerializer(typeof(tv));
-                    serializer.Serialize(Console.Out, tv);
+                    serializer.Serialize(writer, tv);
 
                 }
                 Console.ReadLine();
             }
         }
 
-        private static string GetCurrentTimeInMilliseconds()
+        private static tv MapTVGuideDataToXMLtv(IEnumerable<string> scannedChannelList, IEnumerable<TVGuideListingsData.RootObject> listings)
         {
-            DateTime posixTime = new DateTime(1970, 01, 01);
-            DateTime currentTime = DateTime.Now;
-            return ((currentTime - posixTime).Ticks / 10000).ToString();
+            tv tv = new tv()
+            {
+                generatorinfoname = "WhatsOnConsole",
+                generatorinfourl = "https://github.com/ogrface/WhatsOnConsole"
+            };
+
+            tv.channel = new tvChannel[listings.Count()];
+            int i = 0;
+
+            foreach (var listing in listings)
+            {
+                if (scannedChannelList.Contains(listing.Channel.Number))
+                {
+                    var tvChannel = new tvChannel()
+                    {
+                        id = listing.Channel.Name,
+                        displayname = new tvChannelDisplayname()
+                        {
+                            lang = "en",
+                            Value = listing.Channel.FullName
+                        },
+                        url = "http://www.tvguide.com.FargoND-OTA"
+                    };
+
+                    tv.channel[i] = tvChannel;
+
+                    i++;
+                }
+            }
+
+            foreach (var listing in listings)
+            {
+                if (scannedChannelList.Contains(listing.Channel.Number))
+                {
+                    int j = 0;
+                    tv.programme = new tvProgramme[listing.ProgramSchedules.Count];
+
+                    foreach (var schedule in listing.ProgramSchedules)
+                    {
+                        var tvProgramme = new tvProgramme()
+                        {
+                            start = schedule.StartTime.ToString(),
+                            stop = schedule.EndTime.ToString(),
+                            channel = listing.Channel.Name,
+                        };
+
+                        var tvProgrammeTitle = new tvProgrammeTitle()
+                        {
+                            lang = "en",
+                            Value = schedule.Title
+                        };
+
+                        var tvProgrammeSubTitle = new tvProgrammeSubtitle()
+                        {
+                            lang = "en",
+                            Value = schedule.EpisodeTitle
+                        };
+
+                        var tvProgrammeDesc = new tvProgrammeDesc()
+                        {
+                            lang = "en",
+                            Value = schedule.CopyText
+                        };
+
+                        var episodeNum = new tvProgrammeEpisodenum()
+                        {
+                            system = "xmltv_ns",
+                            Value = $"{schedule.TVObject?.SeasonNumber}.{schedule.TVObject?.EpisodeNumber}."
+                        };
+
+                        var itemList = new List<object>();
+                        itemList.Add(tvProgrammeTitle);
+                        itemList.Add(tvProgrammeSubTitle);
+                        itemList.Add(tvProgrammeDesc);
+                        tvProgramme.Items = itemList.ToArray();
+
+                        tv.programme[j] = tvProgramme;
+
+                        j++;
+                    }
+                }
+            }
+            return tv;
         }
     }
 }
